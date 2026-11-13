@@ -5,6 +5,13 @@ Toutes les évolutions notables de ce dépôt sont décrites ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte
 le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.1.1] - 2026-11-13 - Mots-clés de recherche
+
+### Modifié
+
+- Mots-clés du paquet et sujets du dépôt complétés (`ape`, `sirene`, `insee`, `numero-tva`,
+  `entreprise`, `vat`) pour faciliter la recherche sur Packagist et GitHub. Aucun changement de code.
+
 ## [0.1.0] - 2026-11-13 - Validation SIREN, SIRET, TVA intracommunautaire et code APE
 
 ### Ajouté
@@ -17,6 +24,7 @@ le [versionnage sémantique](https://semver.org/lang/fr/).
 - Exception `IdentifiantInvalide` avec un message en français.
 - Saisie tolérante : espaces, points et tirets ignorés, minuscules acceptées.
 
+[0.1.1]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.1.1
 [0.1.0]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.1.0
 
 ---

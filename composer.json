@@ -3,7 +3,7 @@
     "description": "Validation et formatage des SIREN, SIRET, numéros de TVA intracommunautaire et codes APE français.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["php", "siren", "siret", "tva", "naf", "validation", "france"],
+    "keywords": ["php", "siren", "siret", "tva", "naf", "ape", "sirene", "insee", "numero-tva", "entreprise", "vat", "validation", "france"],
     "homepage": "https://github.com/polygonlab-ai/identifiants-entreprise-fr",
     "authors": [
         {
