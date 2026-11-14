@@ -1,6 +1,6 @@
 {
     "name": "polygonlab/identifiants-entreprise-fr",
-    "description": "Validation et formatage des SIREN, SIRET, numéros de TVA intracommunautaire et codes APE français.",
+    "description": "Validation des SIREN, SIRET, TVA intracommunautaire et codes APE, avec les nomenclatures NAF rév. 2 et NAF 2025.",
     "type": "library",
     "license": "MIT",
     "keywords": ["php", "siren", "siret", "tva", "naf", "ape", "sirene", "insee", "numero-tva", "entreprise", "vat", "validation", "france", "naf-2025", "code-ape"],

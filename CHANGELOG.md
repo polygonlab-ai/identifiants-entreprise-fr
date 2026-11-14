@@ -5,6 +5,16 @@ Toutes les évolutions notables de ce dépôt sont décrites ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le projet respecte
 le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.2.1] - 2026-11-14 - Description du dépôt et nettoyage
+
+### Modifié
+
+- Description du dépôt et du paquet : elle mentionne désormais les nomenclatures NAF rév. 2 et NAF 2025.
+
+### Retiré
+
+- Copie de sauvegarde du README publiée par erreur avec la v0.2.0. Aucun changement de code.
+
 ## [0.2.0] - 2026-11-14 - Nomenclatures NAF rév. 2 et NAF 2025, table de passage officielle
 
 ### Ajouté
@@ -50,6 +60,7 @@ le [versionnage sémantique](https://semver.org/lang/fr/).
 - Exception `IdentifiantInvalide` avec un message en français.
 - Saisie tolérante : espaces, points et tirets ignorés, minuscules acceptées.
 
+[0.2.1]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.2.1
 [0.2.0]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.2.0
 [0.1.1]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.1.1
 [0.1.0]: https://github.com/polygonlab-ai/identifiants-entreprise-fr/releases/tag/v0.1.0
