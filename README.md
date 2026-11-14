@@ -30,7 +30,11 @@ objet immuable : une fois créé, il est forcément valide. Les erreurs sont exp
 - SIREN : 9 chiffres, clé de Luhn, mise en forme `123 456 789`.
 - SIRET : 14 chiffres, clé de Luhn, règle particulière de La Poste, accès au SIREN et au NIC.
 - Numéro de TVA intracommunautaire : contrôle de la clé, calcul depuis un SIREN, clés de l'ancien système signalées.
-- Code APE (NAF rév. 2) : contrôle du format, normalisation, division et section.
+- Code APE : contrôle du format, normalisation, division et section.
+- Nomenclatures officielles NAF rév. 2 et NAF 2025 embarquées : existence d'un code, intitulés, sections.
+- Table de passage officielle de l'INSEE, dans les deux sens : passage automatique, regroupement, éclatement
+  en plusieurs codes signalé quand le choix dépend de l'activité réelle.
+- Nomenclature en vigueur à une date : NAF rév. 2 jusqu'au 31/12/2026, NAF 2025 à partir du 01/01/2027.
 - Saisie tolérante : espaces, points et tirets ignorés, minuscules acceptées.
 - Trois façons de valider : `fromString()` (exception), `tryFromString()` (`null`), `isValid()` (booléen).
 - PHP 8.2 ou plus, aucune dépendance d'exécution.
@@ -169,12 +173,180 @@ NumeroTvaIntracom::fromString('FRA7111111118')->estCleAncienSysteme(); // true
 
 ```php
 use PolygonLab\IdentifiantsEntreprise\CodeApe;
+use PolygonLab\IdentifiantsEntreprise\NomenclatureNaf;
 
 $ape = CodeApe::fromString('4711f');
 $ape->format();   // '47.11F'
 $ape->division(); // '47'
 $ape->section();  // 'G' (null si la division n'appartient à aucune section)
+
+// Existence dans une nomenclature officielle.
+$ape->existe(NomenclatureNaf::REV2);    // true
+$ape->existe(NomenclatureNaf::NAF2025); // false : les codes NAF 2025 sont nouveaux
 ```
+
+`section()` suit toujours le découpage de la NAF rév. 2. Pour la section d'un code dans la NAF 2025,
+utilisez `Naf::section()` (partie suivante).
+
+### NAF 2025 et bascule du 1er janvier 2027
+
+La NAF 2025 (décret n° 2025-736 du 31 juillet 2025) remplace la NAF rév. 2, en vigueur depuis 2008. Le
+1er janvier 2027, l'INSEE attribue un nouveau code APE à toutes les entreprises et à tous leurs
+établissements. Des sous-classes se scindent, d'autres se regroupent ou disparaissent : un logiciel qui
+stocke des codes APE doit savoir lire les deux nomenclatures et passer de l'une à l'autre.
+
+| Date | Étape |
+|---|---|
+| 1er janvier 2008 | Entrée en vigueur de la NAF rév. 2 |
+| 31 juillet 2025 | Décret n° 2025-736 : adoption de la NAF 2025 |
+| 31 décembre 2026 | Dernier jour de la NAF rév. 2 |
+| 1er janvier 2027 | NAF 2025 en vigueur, nouveaux codes APE attribués par l'INSEE |
+
+Les deux nomenclatures ont le même format (`00.00A`), mais aucun code en commun : les sous-classes de la
+NAF rév. 2 finissent par A à F ou Z (732 sous-classes), celles de la NAF 2025 par G, H, J, K, L ou Y
+(747 sous-classes). La NAF 2025 compte 22 sections, de A à V, au lieu de 21.
+
+#### Passer d'un ancien code au nouveau
+
+```php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/vendor/autoload.php';
+
+use PolygonLab\IdentifiantsEntreprise\CodeApe;
+use PolygonLab\IdentifiantsEntreprise\CorrespondanceNaf;
+use PolygonLab\IdentifiantsEntreprise\Naf;
+use PolygonLab\IdentifiantsEntreprise\NomenclatureNaf;
+
+// Nomenclature en vigueur à une date.
+echo NomenclatureNaf::enVigueurLe(new DateTimeImmutable('2027-01-01'))?->label(), "\n";
+
+// Passage automatique : un seul code NAF 2025 correspond.
+foreach (['62.01Z', '62.02B'] as $ancien) {
+    $passage = CorrespondanceNaf::versNaf2025(CodeApe::fromString($ancien));
+    $nouveau = $passage->uniqueCode();
+    if ($nouveau !== null) {
+        $intitule = Naf::intitule($nouveau, NomenclatureNaf::NAF2025);
+        echo $ancien, ' -> ', $nouveau->format(), ' ', $intitule, ' (', $passage->type()->label(), ")\n";
+    }
+}
+
+// Éclatement : le bon code dépend de l'activité réellement exercée, la bibliothèque ne choisit pas.
+$passage = CorrespondanceNaf::versNaf2025(CodeApe::fromString('63.11Z'));
+if ($passage->dependsOnActivity()) {
+    echo '63.11Z : ', $passage->type()->label(), ", choix selon l'activité réellement exercée :\n";
+    foreach ($passage->links() as $lien) {
+        echo '  ', $lien->code()->format(), ' ', $lien->intitule(), "\n";
+    }
+}
+
+// Un code de l'ancienne nomenclature n'existe pas dans la nouvelle.
+echo CodeApe::fromString('62.01Z')->existe(NomenclatureNaf::NAF2025) ? 'existe' : 'n\'existe pas', " en NAF 2025\n";
+```
+
+Sortie attendue (script [`examples/naf-2025.php`](examples/naf-2025.php), vérifié par un test) :
+
+```text
+NAF 2025
+62.01Z -> 62.10Y Activités de programmation informatique (correspondance unique)
+62.02B -> 62.20H Gestion d'installations informatiques et maintenance de systèmes et d’applications informatiques (regroupement avec d'autres codes)
+63.11Z : éclatement en plusieurs codes, choix selon l'activité réellement exercée :
+  60.20H Édition de services de médias à la demande
+  60.39Y Autres activités de distribution de contenu
+  63.10Y Infrastructure informatique, traitement de données, hébergement et activités connexes
+n'existe pas en NAF 2025
+```
+
+#### Les quatre types de passage
+
+Le type est vu depuis le code de départ (`CorrespondanceNaf::type()`, énumération `MappingType`) :
+
+| Type | Sens | NAF rév. 2 vers NAF 2025 | NAF 2025 vers NAF rév. 2 | Exemple | Que faire |
+|---|---|---|---|---|---|
+| `ONE_TO_ONE` | Un seul code correspondant, qui ne reçoit que le code de départ | 361 codes | 361 codes | `62.01Z` vers `62.10Y` | Passage automatique : `uniqueCode()` |
+| `MERGE` | Un seul code correspondant, qui regroupe aussi d'autres codes | 155 codes | 154 codes | `62.02B` et `62.03Z` vers `62.20H` | Passage automatique : `uniqueCode()` ; les autres codes regroupés sont dans `NafLink::otherSources()` |
+| `SPLIT` | Plusieurs codes correspondants | 216 codes | 231 codes | `63.11Z` vers `60.20H`, `60.39Y` ou `63.10Y` | Pas de choix automatique (`dependsOnActivity()` vrai, `uniqueCode()` nul) : le bon code dépend de l'activité réellement exercée |
+| `NONE` | Aucune correspondance déterminée par l'INSEE | 0 code | 1 code | `46.89Y`, code nouveau sans origine déterminée | `hasNoCorrespondence()` vrai, texte de l'INSEE dans `note()` ; liste : `CorrespondanceNaf::newCodesWithoutOrigin()` |
+
+En cas d'éclatement, chaque lien (`NafLink`) donne le code, son intitulé et le « contenu commun » écrit par
+l'INSEE (`commonContent()`) : la part de l'activité de départ qui passe dans ce code. Par exemple, pour
+`47.91B` (vente à distance sur catalogue spécialisé) vers `47.21Y` (commerce de détail de fruits et légumes) :
+« - le commerce de détail par correspondance ou par Internet de fruits et légumes frais, y compris les
+fruits et légumes frais coupés ». C'est ce texte qui
+permet de choisir, ou de faire choisir l'utilisateur. Pour une entreprise donnée, le code attribué par
+l'INSEE au 1er janvier 2027 fait foi.
+
+#### Nomenclatures, intitulés et sections
+
+```php
+use PolygonLab\IdentifiantsEntreprise\CodeApe;
+use PolygonLab\IdentifiantsEntreprise\LabelFormat;
+use PolygonLab\IdentifiantsEntreprise\Naf;
+use PolygonLab\IdentifiantsEntreprise\NomenclatureNaf;
+
+$code = CodeApe::fromString('62.20G');
+Naf::existe($code, NomenclatureNaf::NAF2025);                       // true
+Naf::intitule($code, NomenclatureNaf::NAF2025);                     // 'Conseil en systèmes et logiciels informatiques'
+Naf::intitule($code, NomenclatureNaf::NAF2025, LabelFormat::SHORT); // 'Conseil en système & logiciel informati.'
+Naf::section($code, NomenclatureNaf::NAF2025);                      // 'K' (la division 62 était en J dans la NAF rév. 2)
+Naf::subclasses(NomenclatureNaf::NAF2025);                          // les 747 sous-classes, dans l'ordre officiel
+
+NomenclatureNaf::REV2->validUntil()?->format('d/m/Y');   // '31/12/2026'
+NomenclatureNaf::NAF2025->validFrom()->format('d/m/Y');  // '01/01/2027'
+NomenclatureNaf::enVigueurLe(new DateTimeImmutable('2026-12-31')); // NomenclatureNaf::REV2
+```
+
+| Méthode | Rôle |
+|---|---|
+| `Naf::existe(CodeApe, NomenclatureNaf)` | Le code existe-t-il dans la nomenclature ? Aussi : `CodeApe::existe(NomenclatureNaf)` |
+| `Naf::intitule(CodeApe, NomenclatureNaf, LabelFormat)` | Intitulé complet (`FULL`, par défaut), abrégé à 65 caractères (`ABBREVIATED`) ou court à 40 caractères (`SHORT`). L'INSEE ne publie que l'intitulé complet pour la NAF rév. 2 : les deux autres formes y valent `null` |
+| `Naf::section(CodeApe, NomenclatureNaf)` | Section du code dans la nomenclature |
+| `Naf::subclasses(NomenclatureNaf)` | Toutes les sous-classes |
+| `CorrespondanceNaf::versNaf2025(CodeApe)` / `versNafRev2(CodeApe)` | Codes correspondants dans l'autre nomenclature, avec le type de passage |
+| `NomenclatureNaf::enVigueurLe(DateTimeImmutable)` | Nomenclature en vigueur à une date (`null` avant 2008) ; `validFrom()`, `validUntil()`, `isInForceOn()` |
+
+Un code bien formé mais absent de la nomenclature demandée lève `IdentifiantInvalide`, avec un message qui
+signale quand il appartient à l'autre nomenclature : « Le code APE 62.01Z n'existe pas dans la NAF 2025
+(c'est un code de la NAF rév. 2). »
+
+#### Source et licence des données
+
+Les tables sont générées depuis les fichiers officiels de l'INSEE, publiés sur
+[insee.fr/fr/information/8181066](https://www.insee.fr/fr/information/8181066), sous la Licence Ouverte /
+Open Licence version 2.0 (Etalab). Elles sont embarquées dans le dossier `resources/naf/` : aucun accès
+réseau, aucune dépendance. Chaque fichier de données indique en tête le fichier d'origine, son empreinte
+SHA-256 et sa date d'édition.
+
+Mention exigée par la licence : « Source : Insee », NAF 2025 et tables de passage dans leur édition d'octobre 2026, NAF rév. 2 dans son édition de 2008.
+
+| Fichier de l'INSEE | Contenu | Édition |
+|---|---|---|
+| `NAFrev2_liste_sous-classes.xls` | Sous-classes de la NAF rév. 2 et intitulés | 2008 |
+| `NAF2025_structure.xlsx` | Structure de la NAF 2025 (sections, divisions, groupes, classes, sous-classes) | Octobre 2026 |
+| `NAF2025_intitules.xlsx` | Intitulés complets, abrégés et courts de la NAF 2025 | Octobre 2026 |
+| `Correspondances_NAFrev2-NAF2025.xlsx` | Table de passage de la NAF rév. 2 vers la NAF 2025 | Octobre 2026 |
+| `Correspondances_NAF2025-NAFrev2.xlsx` | Table de passage inversée | Octobre 2026 |
+
+#### Régénérer les données quand l'INSEE publie une nouvelle édition
+
+1. Télécharger les cinq fichiers depuis la page de l'INSEE dans un dossier, sous leur nom d'origine.
+2. Installer les dépendances de développement (`composer install`) : la lecture des tableurs utilise
+   `phpoffice/phpspreadsheet`, dépendance de développement seulement.
+3. Lancer le générateur :
+
+   ```bash
+   php tools/generer-donnees-naf.php /chemin/des/fichiers
+   ```
+
+   Il contrôle chaque fichier (colonnes attendues, nombre de sous-classes, codes en double, codes de la
+   table de passage absents des nomenclatures, accord entre les deux tables) et s'arrête avec un message
+   clair au moindre écart, sans rien écrire. Si une nouvelle édition change le nombre de sous-classes ou de
+   liens, il le signale : vérifier le fichier, puis mettre à jour les nombres attendus en tête de
+   `tools/src/SourceReader.php`.
+4. Contrôler sans écrire : `php tools/generer-donnees-naf.php /chemin/des/fichiers --verifier`.
+5. Lancer les tests, avec la régénération complète : `NAF_SOURCES_INSEE=/chemin/des/fichiers composer test`.
 
 ### Règles appliquées
 
@@ -183,21 +355,28 @@ $ape->section();  // 'G' (null si la division n'appartient à aucune section)
 | SIREN | 9 chiffres ; espaces, points et tirets ignorés | Clé de Luhn | `123 456 789` |
 | SIRET | 14 chiffres ; espaces, points et tirets ignorés | Clé de Luhn. La Poste (SIREN `356000000`) : somme des chiffres multiple de 5, sauf le siège (NIC `00048`), contrôlé par la clé de Luhn | `123 456 789 00012` |
 | TVA intracommunautaire | `FR` + clé de 2 caractères + SIREN ; minuscules, espaces, points et tirets acceptés | SIREN valide. Clé numérique : `(12 + 3 × (SIREN mod 97)) mod 97`, sur 2 chiffres. Clé alphanumérique (ancien système, chiffres et lettres hors I et O, au moins une lettre) : acceptée sans recalcul, signalée par `estCleAncienSysteme()` | `FR 12 345678901` |
-| Code APE | `00.00A`, ou sans point, ou en minuscules | 4 chiffres puis une lettre de A à Z hors I et O. Format seulement | `62.01Z` |
+| Code APE | `00.00A`, ou sans point, ou en minuscules | 4 chiffres puis une lettre de A à Z hors I et O, en NAF rév. 2 comme en NAF 2025. `fromString()` contrôle le format ; l'existence se vérifie avec `existe()` ou la classe `Naf` | `62.01Z` |
 
 ### Limites
 
 - **Aucune vérification d'existence** : un numéro valide peut ne correspondre à aucune entreprise, ou à une entreprise
   fermée. La bibliothèque ne contacte ni l'INSEE (répertoire SIRENE) ni aucun autre service. Pour savoir si une
   entreprise existe, interrogez l'API SIRENE de l'INSEE.
-- **Code APE : format seulement**. Cette version n'embarque pas la table officielle des codes NAF : `00.00A` est bien
-  formé mais n'existe pas. La section est déduite de la division ; une division hors nomenclature donne `null`.
-- **NAF rév. 2** uniquement : la nomenclature NAF 2025 n'est pas encore prise en charge.
+- **Code APE** : `fromString()` contrôle le format seulement, comme avant (`00.00A` est bien formé mais
+  n'existe pas) ; `existe()` et la classe `Naf` vérifient l'existence dans une nomenclature.
+  `CodeApe::section()` suit le découpage de la NAF rév. 2 ; pour la NAF 2025, utilisez `Naf::section()`.
+- **Nomenclatures NAF rév. 2 et NAF 2025 seulement**, au niveau des sous-classes : ni la NAF rév. 1 ni les
+  niveaux intermédiaires (groupes, classes) ne sont pris en charge.
+- **Table de passage dans son édition embarquée** (octobre 2026) : l'INSEE peut la compléter ; une nouvelle
+  version du paquet suit chaque nouvelle édition. En cas d'éclatement, la bibliothèque ne choisit jamais le
+  code : seule l'activité réellement exercée, et le code attribué par l'INSEE, le déterminent.
 - **Numéros de TVA français** uniquement (`FR`) : les autres pays de l'Union européenne ne sont pas contrôlés.
 
 ## Compatibilité
 
 PHP 8.2, 8.3 et 8.4, testés par l'intégration continue. Aucune extension PHP requise en dehors de `ctype` et `pcre`, présentes par défaut.
+Les tables NAF (environ 750 Ko de fichiers PHP) ne sont chargées qu'à leur première utilisation, puis gardées en mémoire
+pour la durée du processus ; avec OPcache, elles ne sont compilées qu'une fois.
 
 ## Tests
 
@@ -207,6 +386,10 @@ composer test      # PHPUnit
 composer analyse   # PHPStan, niveau maximal
 composer style     # PHP-CS-Fixer, PER Coding Style
 ```
+
+La régénération complète des données NAF depuis les fichiers de l'INSEE est rejouée si la variable
+`NAF_SOURCES_INSEE` désigne leur dossier ; sans elle, ces tests sont ignorés, et un test vérifie toujours
+que les fichiers de `resources/naf/` sont exactement ceux que produit le générateur.
 
 ## Contribuer
 

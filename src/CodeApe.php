@@ -7,12 +7,13 @@ namespace PolygonLab\IdentifiantsEntreprise;
 use PolygonLab\IdentifiantsEntreprise\Internal\Normalizer;
 
 /**
- * Code APE (activité principale exercée), selon la nomenclature NAF rév. 2.
+ * Code APE (activité principale exercée), dans la NAF rév. 2 ou la NAF 2025.
  *
  * Format : 2 chiffres, un point, 2 chiffres, une lettre de A à Z hors I et O (« 62.01Z »).
+ * C'est le format des deux nomenclatures (NAF rév. 2 et NAF 2025).
  * Saisie tolérée sans point, avec espaces ou en minuscules : elle est normalisée.
- * La validation porte sur le format seulement : le paquet n'embarque pas la table
- * officielle des codes NAF, un code bien formé peut donc ne pas exister.
+ * fromString() valide le format seulement : un code bien formé peut ne pas exister.
+ * Pour vérifier qu'il existe dans une nomenclature : existe(), ou la classe Naf.
  */
 final class CodeApe
 {
@@ -94,6 +95,16 @@ final class CodeApe
     }
 
     /**
+     * Le code existe-t-il dans cette nomenclature (table officielle de l'INSEE) ?
+     *
+     * Exemple : « 62.01Z » existe dans la NAF rév. 2, pas dans la NAF 2025 (son correspondant est « 62.10Y »).
+     */
+    public function existe(NomenclatureNaf $nomenclature): bool
+    {
+        return Naf::existe($this, $nomenclature);
+    }
+
+    /**
      * Division : les 2 premiers chiffres (« 62 »).
      */
     public function division(): string
@@ -104,6 +115,9 @@ final class CodeApe
     /**
      * Section de la NAF rév. 2 (lettre de A à U) déduite de la division, ou null si
      * la division n'appartient à aucune section (« 00 », « 04 », « 34 »...).
+     *
+     * Toujours selon le découpage de la NAF rév. 2, même pour un code de la NAF 2025 :
+     * pour la section dans la NAF 2025, utiliser Naf::section().
      */
     public function section(): ?string
     {

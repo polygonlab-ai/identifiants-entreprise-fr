@@ -59,6 +59,23 @@ final class IdentifiantInvalide extends \InvalidArgumentException
     }
 
     /**
+     * Valeur bien formée, mais absente de la table officielle.
+     *
+     * @param string $libelle     sujet de la phrase, par exemple « Le code APE »
+     * @param string $nomenclature nom de la table, par exemple « NAF 2025 »
+     */
+    public static function absent(string $libelle, string $valeur, string $nomenclature, string $precision = ''): self
+    {
+        return new self(sprintf(
+            '%s %s n\'existe pas dans la %s%s.',
+            $libelle,
+            $valeur,
+            $nomenclature,
+            $precision !== '' ? ' (' . $precision . ')' : '',
+        ));
+    }
+
+    /**
      * @param string $libelle sujet de la phrase, par exemple « du SIREN »
      * @param string $regle   règle appliquée, par exemple « algorithme de Luhn »
      */
